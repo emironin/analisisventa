@@ -261,7 +261,7 @@
     <script>
         let baseClientesRaw = {}; 
         let listadoTodosRubros = new Set();
-        let listaMesesDetectados = ["enero", "febrero", "marzo", "abril", "mayo", "junio"]; 
+        let listaMesesDetectados = []; 
         let periodoFiltroActual = "TOTAL"; 
         let vistaActual = 'ranking';
         let ultimoRubroSeleccionadoVistaB = "";
@@ -300,6 +300,40 @@
                     }
                 }
 
+                // --- DETECCIÓN DINÁMICA DE MESES ---
+                listaMesesDetectados = [];
+                let indicesMensuales = {};
+                
+                if (filaEncabezadosDatos > 1) {
+                    // La fila con los meses es la anterior a los encabezados
+                    let filaMesesRaw = lineas[filaEncabezadosDatos - 1];
+                    let colsMeses = splitCSVLine(filaMesesRaw);
+                    
+                    for (let c = 0; c < colsMeses.length; c++) {
+                        let mesNom = colsMeses[c].trim().toLowerCase().replace(/^"|"$/g, '').trim();
+                        if (mesNom && mesNom !== "fecha (por mes)" && mesNom !== "totales") {
+                            listaMesesDetectados.push(mesNom);
+                            indicesMensuales[mesNom] = c; // Guarda el índice exacto donde comienza Cantidad del mes
+                        }
+                    }
+                }
+
+                // Si no detectó meses por algún motivo, fallback seguro a la lista tradicional
+                if (listaMesesDetectados.length === 0) {
+                    listaMesesDetectados = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio"];
+                    indicesMensuales = {
+                        "enero": 5, "febrero": 8, "marzo": 11, "abril": 14, "mayo": 17, "junio": 20, "julio": 23
+                    };
+                }
+
+                // Los Totales Anuales siempre son las últimas 3 columnas de datos en la fila de encabezados
+                // pero dinámicamente podemos calcularlos sumando 3 columnas después del último mes
+                let ultimoMes = listaMesesDetectados[listaMesesDetectados.length - 1];
+                let idxUltimoMes = indicesMensuales[ultimoMes];
+                let idxCantAnual = idxUltimoMes + 3;
+                let idxNetoAnual = idxUltimoMes + 4;
+                let idxTotalAnual = idxUltimoMes + 5;
+
                 let selectPeriodo = document.getElementById('select-periodo-filtro');
                 selectPeriodo.innerHTML = '<option value="TOTAL" class="bg-slate-900 text-slate-100">2026 - Todo el Año (Acumulado)</option>';
                 listaMesesDetectados.forEach(m => {
@@ -325,7 +359,7 @@
                     let rawRubro = columnas[3] ? columnas[3].trim().replace(/^"|"$/g, '').trim() : "";
                     let rawSubrubro = columnas[4] ? columnas[4].trim().replace(/^"|"$/g, '').trim() : "";
 
-                    // ALGORITMO DE HERENCIA DE CLIENTE: Si viene vacío (;;), asume el de arriba
+                    // ALGORITMO DE HERENCIA DE CLIENTE
                     if (rawId !== "") {
                         ultimoClienteId = rawId;
                         ultimoClienteNombre = rawNombre || `Cliente Desconocido (${rawId})`;
@@ -345,11 +379,6 @@
                     }
 
                     if(rawRubro && rawRubro !== "") listadoTodosRubros.add(rawRubro);
-
-                    // CONTROL ABSOLUTO DE MAPPING POR ÍNDICES DE CELDAS DEL ARCHIVO
-                    let indicesMensuales = {
-                        "enero": 5, "febrero": 8, "marzo": 11, "abril": 14, "mayo": 17, "junio": 20
-                    };
 
                     listaMesesDetectados.forEach(m => {
                         let idx = indicesMensuales[m];
@@ -372,10 +401,10 @@
                         }
                     });
 
-                    // ASIGNACIÓN ABSOLUTA DE LAS COLUMNAS ANUALES DEL CSV (23, 24 y 25)
-                    let cantAnual = parseCurrency(columnas[23]);
-                    let netoAnual = parseCurrency(columnas[24]);
-                    let totalAnual = parseCurrency(columnas[25]);
+                    // ASIGNACIÓN DINÁMICA DE LAS COLUMNAS ANUALES
+                    let cantAnual = parseCurrency(columnas[idxCantAnual]);
+                    let netoAnual = parseCurrency(columnas[idxNetoAnual]);
+                    let totalAnual = parseCurrency(columnas[idxTotalAnual]);
 
                     baseClientesRaw[ultimoClienteId].periodos["TOTAL"].facturado += totalAnual;
                     baseClientesRaw[ultimoClienteId].periodos["TOTAL"].neto += netoAnual;
@@ -404,7 +433,8 @@
                 ejecutarCalculosGlobales();
                 switchView('ranking');
             };
-            reader.readAsText(file, "UTF-8"); 
+            // CAMBIO DE ENCODING CLAVE: Ahora se lee como ISO-8859-1 para respetar tildes y caracteres especiales del CSV de Altri S.A.
+            reader.readAsText(file, "ISO-8859-1"); 
         }
 
         function calcularComisionMonto(montoNeto) {
@@ -686,16 +716,21 @@
             lista.forEach(cli => {
                 let rubrosComprados = Object.keys(cli.rubros).sort();
                 let rubrosFaltantes = todosLosRubrosArr.filter(r => !rubrosComprados.includes(r));
-
-                let maxRubroGasto = 0;
-                rubrosComprados.forEach(r => { if(cli.rubros[r].total > maxRubroGasto) maxRubroGasto = cli.rubros[r].total; });
                 
-                let ratioConcentracion = cli.facturado > 0 ? (maxRubroGasto / cli.facturado) : 0;
-                let badgeSalud = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs block text-center font-bold">Mix OK</span>`;
+                let cantRubros = rubrosComprados.length;
+                let badgeSalud = "";
                 
-                if (cli.facturado === 0) badgeSalud = `<span class="bg-slate-700 text-slate-400 px-2 py-0.5 rounded text-xs block text-center">Inactivo</span>`;
-                else if (ratioConcentracion > 0.75 && rubrosComprados.length === 1) badgeSalud = `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded text-xs font-bold block text-center animate-pulse">Alerta</span>`;
-                else if (ratioConcentracion > 0.60) badgeSalud = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs block text-center font-medium">Riesgo</span>`;
+                if (cli.facturado === 0) {
+                    badgeSalud = `<span class="bg-slate-700 text-slate-400 px-2 py-0.5 rounded text-xs block text-center">Inactivo</span>`;
+                } else if (cantRubros === 1) {
+                    badgeSalud = `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded text-xs font-bold block text-center animate-pulse">Alerta</span>`;
+                } else if (cantRubros <= 5) {
+                    badgeSalud = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs block text-center font-medium">Riesgo</span>`;
+                } else if (cantRubros <= 9) {
+                    badgeSalud = `<span class="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-xs block text-center font-medium">Regular</span>`;
+                } else {
+                    badgeSalud = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs block text-center font-bold">Mix OK</span>`;
+                }
 
                 let bloquesComprados = rubrosComprados.map(r => `<span class="inline-block bg-slate-900 text-emerald-400 text-[10px] px-2 py-0.5 rounded mr-1 mb-1 border border-slate-700 font-medium">${r}</span>`).join('');
                 let bloquesFaltantes = rubrosFaltantes.map(r => `<span class="inline-block bg-amber-500/5 text-amber-400/90 text-[10px] px-2 py-0.5 rounded mr-1 mb-1 border border-amber-500/20 font-medium">${r}</span>`).join('');
@@ -820,13 +855,24 @@
                 return;
             }
 
-            let maxGasto = 0;
-            Object.values(pData.rubros).forEach(r => { if(r.total > maxGasto) maxGasto = r.total; });
-            let ratio = pData.facturado > 0 ? (maxGasto / pData.facturado) : 0;
+            let cantRubros = Object.keys(pData.rubros).length;
 
-            let labelSalud = "Excelente Mix de Compra"; let colorSalud = "text-emerald-400";
-            if(ratio > 0.75 && Object.keys(pData.rubros).length === 1) { labelSalud = "Alerta: Monoproducto"; colorSalud = "text-rose-400"; }
-            else if(ratio > 0.60) { labelSalud = "Atención: Concentrado"; colorSalud = "text-amber-400"; }
+            let labelSalud = ""; 
+            let colorSalud = "";
+            
+            if (cantRubros === 1) { 
+                labelSalud = "Alerta: Monoproducto"; 
+                colorSalud = "text-rose-400"; 
+            } else if (cantRubros <= 5) { 
+                labelSalud = "Atención: Cartera Concentrada (Riesgo)"; 
+                colorSalud = "text-amber-400"; 
+            } else if (cantRubros <= 9) { 
+                labelSalud = "Regular: En Desarrollo Comercial"; 
+                colorSalud = "text-blue-400"; 
+            } else { 
+                labelSalud = "Excelente Mix de Compra (Mix OK)"; 
+                colorSalud = "text-emerald-400"; 
+            }
 
             document.getElementById('modal-perfil-salud').innerText = labelSalud;
             document.getElementById('modal-perfil-salud').className = `text-sm font-bold mt-1 ${colorSalud}`;
@@ -875,6 +921,7 @@
             let num = parseFloat(clean); return isNaN(num) ? 0 : num;
         }
 
+        // Formato moneda Argentina
         function formatCurrency(num) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num); }
 
         function exportTableToCSV(tableId, filename) {
