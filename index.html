@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador Inteligente de Ventas - Altri S.A.</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <div class="container mx-auto px-4 py-6 max-w-7xl">
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-slate-800 pb-4 gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r bg-emerald-400 to-teal-500">
+                    Smart Analytics Comercial
+                </h1>
+                <p class="text-sm text-slate-400 mt-1">Análisis de penetración, cross-selling, fugas y comisiones dinámicas</p>
+            </div>
+            <div class="text-right flex flex-col items-end gap-1">
+                <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full font-mono">
+                    Estructura Definitiva Unificada v8.0
+                </span>
+            </div>
+        </header>
+
+        <div id="drop-zone" class="border-2 border-dashed border-slate-700 bg-slate-800/50 hover:bg-slate-800 hover:border-emerald-500 rounded-xl p-8 text-center cursor-pointer transition-all mb-8">
+            <div class="flex flex-col items-center justify-center space-y-3">
+                <svg class="w-12 h-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <p class="text-lg font-medium text-slate-300">Arrastrá tu archivo <span class="text-emerald-400 font-bold">VENTAS 2026.CSV</span> aquí o haz clic para buscar</p>
+                <p class="text-xs text-slate-500">Soporta codificación con delimitador de punto y coma (;)</p>
+                <input type="file" id="file-input" class="hidden" accept=".csv, text/csv">
+            </div>
+        </div>
+
+        <div id="dashboard-summary" class="hidden grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider" id="lbl-kpi-facturado">Facturación Bruta Total</p>
+                <p id="meta-total-facturado" class="text-xl font-bold mt-2 text-emerald-400">$0,00</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider" id="lbl-kpi-neto">Importe Neto Total</p>
+                <p id="meta-total-neto" class="text-xl font-bold mt-2 text-blue-400">$0,00</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 bg-gradient-to-br from-slate-800 to-amber-950/40">
+                <p class="text-xs text-amber-400 uppercase font-semibold tracking-wider">Mi Comisión Calculada</p>
+                <p id="meta-total-comision" class="text-xl font-bold mt-2 text-amber-400">$0,00</p>
+                <p id="meta-comision-tasa" class="text-[10px] text-slate-400 font-medium italic mt-0.5">Tasa: -</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Cartera Activa</p>
+                <p id="meta-total-clientes" class="text-xl font-bold mt-2 text-teal-400">0</p>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <p class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Top Cliente Periodo</p>
+                <p id="meta-top-cliente" class="text-sm font-bold mt-2 text-purple-400 truncate">-</p>
+            </div>
+        </div>
+
+        <div id="chart-section" class="hidden bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6">
+            <div>
+                <h3 class="font-bold text-slate-200 text-sm">Auditoría de Comisiones Mensuales</h3>
+                <p class="text-xs text-slate-400">Regla Comercial: Neto &lt; 100M = 0.75% | Neto &ge; 100M = 1.00% (Barra Oro)</p>
+            </div>
+            <div class="w-full h-44 mt-3">
+                <canvas id="comisionesChart"></canvas>
+            </div>
+        </div>
+
+        <div id="main-content" class="hidden space-y-6">
+            <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col lg:flex-row gap-4 items-center justify-between">
+                <div class="flex flex-wrap gap-2 w-full lg:w-auto" id="nav-tabs">
+                    <button onclick="switchView('ranking')" id="btn-tab-ranking" class="px-4 py-2 bg-emerald-600 font-bold text-slate-950 rounded-lg text-sm transition-all cursor-pointer">📊 Ranking Clientes</button>
+                    <button onclick="switchView('rubros')" id="btn-tab-rubros" class="px-4 py-2 bg-slate-700 text-slate-200 hover:bg-slate-600 font-bold rounded-lg text-sm transition-all cursor-pointer">🏷️ Análisis por Rubro</button>
+                    <button onclick="switchView('radiografia')" id="btn-tab-radiografia" class="px-4 py-2 bg-slate-700 text-slate-200 hover:bg-slate-600 font-bold rounded-lg text-sm transition-all cursor-pointer">🎯 Radiografía y Brechas</button>
+                    <button onclick="switchView('matriz')" id="btn-tab-matriz" class="px-4 py-2 bg-slate-700 text-slate-200 hover:bg-slate-600 font-bold rounded-lg text-sm transition-all cursor-pointer">🔥 Oportunidades Cruzadas</button>
+                    <button onclick="switchView('retencion')" id="btn-tab-retencion" class="px-4 py-2 bg-slate-700 text-rose-300 hover:bg-rose-950/40 font-bold border border-transparent rounded-lg text-sm transition-all cursor-pointer">📉 Alerta Retención / Fuga</button>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+                    <div class="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5">
+                        <label for="select-periodo-filtro" class="text-xs font-bold text-slate-400 uppercase">Período:</label>
+                        <select id="select-periodo-filtro" onchange="handlePeriodoChange()" class="bg-transparent text-xs font-bold text-emerald-400 focus:outline-none cursor-pointer">
+                            <option value="TOTAL" class="bg-slate-900 text-slate-100">2026 - Todo el Año (Acumulado)</option>
+                        </select>
+                    </div>
+
+                    <div class="relative w-full sm:w-64">
+                        <input type="text" id="global-search" oninput="handleGlobalSearch()" placeholder="Buscar cliente por nombre..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-ranking" class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <div class="p-4 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                    <div class="flex items-center gap-4">
+                        <h3 class="font-bold text-slate-200" id="titulo-grilla-ranking">Ranking de Clientes</h3>
+                    </div>
+                    <button onclick="exportTableToCSV('ranking-table-data', 'Ranking_Clientes')" class="text-xs bg-slate-700 px-3 py-1.5 rounded hover:bg-slate-600 transition cursor-pointer">📥 Descargar Info</button>
+                </div>
+                <div class="overflow-x-auto custom-scroll max-h-[550px]">
+                    <table class="w-full text-left border-collapse text-sm" id="ranking-table-data">
+                        <thead class="bg-slate-900 text-slate-400 sticky top-0 z-10">
+                            <tr>
+                                <th class="p-3 font-semibold">Puesto</th>
+                                <th class="p-3 font-semibold">Cód. Cliente</th>
+                                <th class="p-3 font-semibold">Razón Social / Nombre</th>
+                                <th class="p-3 font-semibold text-right">Cant. Artículos</th>
+                                <th class="p-3 font-semibold text-right">Facturado ($)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-ranking" class="divide-y divide-slate-700/50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-rubros" class="hidden space-y-4">
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-xs text-slate-400 uppercase font-semibold mb-3">Filtro por rubro comercial (Verde = Activo):</p>
+                    <div id="container-botones-rubros" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <div class="p-4 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                        <h3 class="font-bold text-slate-200" id="rubro-seleccionado-titulo">Seleccioná un rubro para ver los detalles</h3>
+                        <span id="badge-contador-rubro" class="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-full font-mono">0 Clientes</span>
+                    </div>
+                    <div class="overflow-x-auto custom-scroll max-h-[450px]">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead class="bg-slate-900 text-slate-400 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3 font-semibold">Cliente</th>
+                                    <th class="p-3 font-semibold">Subrubro Destacado</th>
+                                    <th class="p-3 font-semibold text-right">Cantidad Adquirida</th>
+                                    <th class="p-3 font-semibold text-right">Invertido ($)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="body-rubros-clientes" class="divide-y divide-slate-700/50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-radiografia" class="hidden bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <div class="p-4 bg-slate-800/50 border-b border-slate-700">
+                    <h3 class="font-bold text-slate-200">Ficha de Penetración de Producto</h3>
+                </div>
+                <div class="overflow-x-auto custom-scroll max-h-[600px]">
+                    <table class="w-full text-left border-collapse text-sm table-fixed">
+                        <thead class="bg-slate-900 text-slate-400 sticky top-0 z-10">
+                            <tr>
+                                <th class="p-3 font-semibold w-[20%]">Cliente</th>
+                                <th class="p-3 font-semibold w-[38%] text-emerald-400">Rubros Comprados</th>
+                                <th class="p-3 font-semibold w-[32%] text-amber-400">Rubros Faltantes</th>
+                                <th class="p-3 font-semibold text-center w-[10%]">Salud</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-radiografia" class="divide-y divide-slate-700/50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-matriz" class="hidden space-y-4">
+                <div class="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                    <h3 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r bg-amber-400 to-orange-500 mb-2">⚡ Algoritmo Predictivo de Cross-Selling</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">1. Si compra el rubro:</label>
+                            <select id="select-matriz-base" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">2. Pero NO compró el rubro complementario:</label>
+                            <select id="select-matriz-objetivo" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-amber-500"></select>
+                        </div>
+                    </div>
+                    <button onclick="ejecutarAnalisisCruzado()" class="mt-4 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-sm transition-all w-full md:w-auto shadow cursor-pointer">Buscar Referencias</button>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <table class="w-full text-left border-collapse text-sm" id="matriz-table">
+                        <thead class="bg-slate-900 text-slate-400">
+                            <tr>
+                                <th class="p-3 font-semibold">Código</th>
+                                <th class="p-3 font-semibold">Cliente Potencial</th>
+                                <th class="p-3 font-semibold text-right">Compra en Base ($)</th>
+                                <th class="p-3 font-semibold text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-matriz-oportunidades" class="divide-y divide-slate-700/50">
+                            <tr><td colspan="4" class="p-6 text-center text-slate-500">Seleccioná los rubros arriba y hacé clic en "Buscar Prospectos".</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-retencion" class="hidden space-y-4">
+                <div class="bg-slate-800 p-5 rounded-xl border border-rose-950/50 bg-gradient-to-br from-slate-800 to-rose-950/10">
+                    <h3 class="text-lg font-bold text-rose-400 mb-1 flex items-center gap-2">⚠️ Auditoría Temprana de Fuga de Clientes</h3>
+                    <p class="text-sm text-slate-300">
+                        Muestra de forma automática qué cuentas compraron el mes pasado pero registraron <strong class="text-rose-400">cero pesos ($0,00)</strong> en el mes actual.
+                    </p>
+                </div>
+
+                <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                    <div class="p-4 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+                        <h4 class="font-bold text-slate-200" id="titulo-tabla-retencion">Clientes Caídos en el Período</h4>
+                        <span id="badge-contador-caidos" class="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-1 rounded-full font-mono">0 Cuentas</span>
+                    </div>
+                    <div class="overflow-x-auto max-h-[450px] custom-scroll">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead class="bg-slate-900 text-slate-400 sticky top-0 z-10">
+                                <tr>
+                                    <th class="p-3 font-semibold">Cód.</th>
+                                    <th class="p-3 font-semibold">Razón Social / Cliente</th>
+                                    <th class="p-3 font-semibold text-right text-emerald-400">¿Cuánto compró el mes pasado? ($)</th>
+                                    <th class="p-3 font-semibold text-right text-rose-400">Compra Mes Actual ($)</th>
+                                    <th class="p-3 font-semibold text-center">Estatus Alerta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="body-retencion-caidos" class="divide-y divide-slate-700/50 text-slate-300">
+                                <tr><td colspan="5" class="p-8 text-center text-slate-500">Seleccioná un mes individual para contrastar (Enero es el mes base inicial).</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="modal-cliente" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-100 text-2xl font-bold cursor-pointer">&times;</button>
+            <div class="mb-4">
+                <h3 id="modal-titulo-cliente" class="text-xl font-extrabold text-emerald-400 mb-1">Nombre del Cliente</h3>
+                <p id="modal-id-cliente" class="text-xs font-mono text-slate-400">CÓDIGO DE CUENTA: -</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 shrink-0">
+                <div class="bg-slate-900 p-3 rounded-lg border border-slate-700/60">
+                    <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-400" id="modal-lbl-total">Total Invertido</p>
+                    <p id="modal-total-compras" class="text-xl font-bold text-emerald-400 mt-1">$0,00</p>
+                </div>
+                <div class="bg-slate-900 p-3 rounded-lg border border-slate-700/60">
+                    <p class="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Perfil de Riesgo</p>
+                    <p id="modal-perfil-salud" class="text-sm font-bold mt-1">-</p>
+                </div>
+            </div>
+            <div class="flex flex-col flex-1 overflow-hidden">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 shrink-0">Distribución de Consumos Mapeados:</h4>
+                <div id="modal-lista-rubros" class="space-y-3 overflow-y-auto custom-scroll pr-1 flex-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let baseClientesRaw = {}; 
+        let listadoTodosRubros = new Set();
+        let listaMesesDetectados = ["enero", "febrero", "marzo", "abril", "mayo", "junio"]; 
+        let periodoFiltroActual = "TOTAL"; 
+        let vistaActual = 'ranking';
+        let ultimoRubroSeleccionadoVistaB = "";
+        let miGraficoComisiones = null; 
+
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-emerald-500'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-emerald-500'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length > 0) procesarArchivo(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) procesarArchivo(e.target.files[0]);
+        });
+
+        function procesarArchivo(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const contenido = e.target.result;
+                const lineas = contenido.split(/\r?\n/);
+                
+                baseClientesRaw = {};
+                listadoTodosRubros = new Set();
+                let ultimoClienteId = null;
+                let ultimoClienteNombre = "";
+
+                let filaEncabezadosDatos = -1;
+                for(let i=0; i<lineas.length; i++) {
+                    if(lineas[i].startsWith("CLIENTE;") || lineas[i].includes("NOM_CLI")) {
+                        filaEncabezadosDatos = i;
+                        break;
+                    }
+                }
+
+                let selectPeriodo = document.getElementById('select-periodo-filtro');
+                selectPeriodo.innerHTML = '<option value="TOTAL" class="bg-slate-900 text-slate-100">2026 - Todo el Año (Acumulado)</option>';
+                listaMesesDetectados.forEach(m => {
+                    let opt = document.createElement('option');
+                    opt.value = m;
+                    opt.className = "bg-slate-900 text-slate-100 font-bold uppercase";
+                    opt.innerText = `2026 - ${m.toUpperCase()}`;
+                    selectPeriodo.appendChild(opt);
+                });
+
+                let filaInicio = filaEncabezadosDatos + 1;
+
+                for (let i = filaInicio; i < lineas.length; i++) {
+                    let linea = lineas[i].trim();
+                    if (!linea) continue;
+
+                    let columnas = splitCSVLine(linea);
+                    if (columnas.length < 8) continue;
+
+                    let rawId = columnas[0] ? columnas[0].trim() : "";
+                    let rawNombre = columnas[1] ? columnas[1].trim().replace(/^"|"$/g, '').trim() : "";
+                    let rawAlfa = columnas[2] ? columnas[2].trim().replace(/^"|"$/g, '').trim() : "";
+                    let rawRubro = columnas[3] ? columnas[3].trim().replace(/^"|"$/g, '').trim() : "";
+                    let rawSubrubro = columnas[4] ? columnas[4].trim().replace(/^"|"$/g, '').trim() : "";
+
+                    // ALGORITMO DE HERENCIA DE CLIENTE: Si viene vacío (;;), asume el de arriba
+                    if (rawId !== "") {
+                        ultimoClienteId = rawId;
+                        ultimoClienteNombre = rawNombre || `Cliente Desconocido (${rawId})`;
+                    }
+
+                    if (!ultimoClienteId) continue;
+
+                    if (!baseClientesRaw[ultimoClienteId]) {
+                        baseClientesRaw[ultimoClienteId] = {
+                            id: ultimoClienteId,
+                            nombre: ultimoClienteNombre,
+                            periodos: { "TOTAL": { facturado: 0, neto: 0, cantidad: 0, rubros: {} } }
+                        };
+                        listaMesesDetectados.forEach(m => {
+                            baseClientesRaw[ultimoClienteId].periodos[m] = { facturado: 0, neto: 0, cantidad: 0, rubros: {} };
+                        });
+                    }
+
+                    if(rawRubro && rawRubro !== "") listadoTodosRubros.add(rawRubro);
+
+                    // CONTROL ABSOLUTO DE MAPPING POR ÍNDICES DE CELDAS DEL ARCHIVO
+                    let indicesMensuales = {
+                        "enero": 5, "febrero": 8, "marzo": 11, "abril": 14, "mayo": 17, "junio": 20
+                    };
+
+                    listaMesesDetectados.forEach(m => {
+                        let idx = indicesMensuales[m];
+                        let mCant = parseCurrency(columnas[idx]);
+                        let mNet = parseCurrency(columnas[idx+1]);
+                        let mTot = parseCurrency(columnas[idx+2]);
+
+                        baseClientesRaw[ultimoClienteId].periodos[m].facturado += mTot;
+                        baseClientesRaw[ultimoClienteId].periodos[m].neto += mNet;
+                        baseClientesRaw[ultimoClienteId].periodos[m].cantidad += mCant;
+
+                        if (rawRubro && (mTot !== 0 || mCant !== 0)) {
+                            if (!baseClientesRaw[ultimoClienteId].periodos[m].rubros[rawRubro]) {
+                                baseClientesRaw[ultimoClienteId].periodos[m].rubros[rawRubro] = { total: 0, cantidad: 0, subrubros: new Set(), codigosAlfa: new Set() };
+                            }
+                            baseClientesRaw[ultimoClienteId].periodos[m].rubros[rawRubro].total += mTot;
+                            baseClientesRaw[ultimoClienteId].periodos[m].rubros[rawRubro].cantidad += mCant;
+                            if(rawSubrubro && rawSubrubro !== "") baseClientesRaw[ultimoClienteId].periodos[m].rubros[rawRubro].subrubros.add(rawSubrubro);
+                            if(rawAlfa && rawAlfa !== "") baseClientesRaw[ultimoClienteId].periodos[m].rubros[rawRubro].codigosAlfa.add(rawAlfa);
+                        }
+                    });
+
+                    // ASIGNACIÓN ABSOLUTA DE LAS COLUMNAS ANUALES DEL CSV (23, 24 y 25)
+                    let cantAnual = parseCurrency(columnas[23]);
+                    let netoAnual = parseCurrency(columnas[24]);
+                    let totalAnual = parseCurrency(columnas[25]);
+
+                    baseClientesRaw[ultimoClienteId].periodos["TOTAL"].facturado += totalAnual;
+                    baseClientesRaw[ultimoClienteId].periodos["TOTAL"].neto += netoAnual;
+                    baseClientesRaw[ultimoClienteId].periodos["TOTAL"].cantidad += cantAnual;
+
+                    if (rawRubro) {
+                        if (!baseClientesRaw[ultimoClienteId].periodos["TOTAL"].rubros[rawRubro]) {
+                            baseClientesRaw[ultimoClienteId].periodos["TOTAL"].rubros[rawRubro] = { total: 0, cantidad: 0, subrubros: new Set(), codigosAlfa: new Set() };
+                        }
+                        baseClientesRaw[ultimoClienteId].periodos["TOTAL"].rubros[rawRubro].total += totalAnual;
+                        baseClientesRaw[ultimoClienteId].periodos["TOTAL"].rubros[rawRubro].cantidad += cantAnual;
+                        if(rawSubrubro && rawSubrubro !== "") baseClientesRaw[ultimoClienteId].periodos["TOTAL"].rubros[rawRubro].subrubros.add(rawSubrubro);
+                        if(rawAlfa && rawAlfa !== "") baseClientesRaw[ultimoClienteId].periodos["TOTAL"].rubros[rawRubro].codigosAlfa.add(rawAlfa);
+                    }
+                }
+
+                periodoFiltroActual = "TOTAL";
+                document.getElementById('select-periodo-filtro').value = "TOTAL";
+                ultimoRubroSeleccionadoVistaB = "";
+                
+                document.getElementById('dashboard-summary').classList.remove('hidden');
+                document.getElementById('chart-section').classList.remove('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                
+                generarGraficoComisiones();
+                ejecutarCalculosGlobales();
+                switchView('ranking');
+            };
+            reader.readAsText(file, "UTF-8"); 
+        }
+
+        function calcularComisionMonto(montoNeto) {
+            let limite = 100000000; 
+            let tasa = montoNeto >= limite ? 0.01 : 0.0075; 
+            return {
+                monto: montoNeto * tasa,
+                tasaPct: tasa === 0.01 ? "1.00% (Objetivo &ge; 100M Superado)" : "0.75% (Base Comercial)"
+            };
+        }
+
+        function generarGraficoComisiones() {
+            let etiquetas = listaMesesDetectados.map(m => m.toUpperCase());
+            let netosPorMes = [];
+            let comisionesPorMes = [];
+
+            listaMesesDetectados.forEach(m => {
+                let totalNetoMes = Object.values(baseClientesRaw).reduce((acc, cli) => acc + cli.periodos[m].neto, 0);
+                let comiInfo = calcularComisionMonto(totalNetoMes);
+                netosPorMes.push(totalNetoMes);
+                comisionesPorMes.push(comiInfo.monto);
+            });
+
+            if(miGraficoComisiones) miGraficoComisiones.destroy();
+
+            // Resaltar en CYAN si el mes del desplegable coincide con la barra
+            let coloresBarras = listaMesesDetectados.map((m, i) => {
+                if (periodoFiltroActual !== "TOTAL" && periodoFiltroActual === m) return '#22d3ee'; 
+                return netosPorMes[i] >= 100000000 ? '#f59e0b' : '#10b981';
+            });
+
+            let ctx = document.getElementById('comisionesChart').getContext('2d');
+            miGraficoComisiones = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{
+                        data: comisionesPorMes,
+                        backgroundColor: coloresBarras,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let idx = context.dataIndex;
+                                    return [
+                                        `Comisión: ${formatCurrency(context.raw)}`,
+                                        `Neto del Mes: ${formatCurrency(netosPorMes[idx])}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 9 } } },
+                        x: { grid: { display: false }, ticks: { color: '#cbd5e1', font: { size: 10, weight: 'bold' } } }
+                    }
+                }
+            });
+        }
+
+        function handlePeriodoChange() {
+            periodoFiltroActual = document.getElementById('select-periodo-filtro').value;
+            
+            if (periodoFiltroActual === "TOTAL") {
+                document.getElementById('lbl-kpi-facturado').innerText = "Facturación Bruta Total Anual";
+                document.getElementById('lbl-kpi-neto').innerText = "Importe Neto Total Anual";
+                document.getElementById('titulo-grilla-ranking').innerText = "Ranking de Clientes (Histórico Acumulado)";
+            } else {
+                document.getElementById('lbl-kpi-facturado').innerText = `Facturación Bruta (${periodoFiltroActual.toUpperCase()})`;
+                document.getElementById('lbl-kpi-neto').innerText = `Importe Neto (${periodoFiltroActual.toUpperCase()})`;
+                document.getElementById('titulo-grilla-ranking').innerText = `Ranking de Clientes (Mes: ${periodoFiltroActual.toUpperCase()})`;
+            }
+
+            generarGraficoComisiones(); // Actualizar colores de barras
+            ejecutarCalculosGlobales();
+        }
+
+        function ejecutarCalculosGlobales() {
+            let listadoClientesActivos = Object.values(baseClientesRaw);
+            let totalFacturadoPeriodo = listadoClientesActivos.reduce((acc, c) => acc + c.periodos[periodoFiltroActual].facturado, 0);
+            let totalNetoPeriodo = listadoClientesActivos.reduce((acc, c) => acc + c.periodos[periodoFiltroActual].neto, 0);
+
+            let resComision = calcularComisionMonto(totalNetoPeriodo);
+            
+            document.getElementById('meta-total-facturado').innerText = formatCurrency(totalFacturadoPeriodo);
+            document.getElementById('meta-total-neto').innerText = formatCurrency(totalNetoPeriodo);
+            document.getElementById('meta-total-comision').innerText = formatCurrency(resComision.monto);
+            document.getElementById('meta-comision-tasa').innerText = `Tasa aplicada: ${resComision.tasaPct}`;
+
+            let clientesConVenta = listadoClientesActivos.filter(c => c.periodos[periodoFiltroActual].facturado > 0);
+            document.getElementById('meta-total-clientes').innerText = clientesConVenta.length;
+
+            clientesConVenta.sort((a,b) => b.periodos[periodoFiltroActual].facturado - a.periodos[periodoFiltroActual].facturado);
+            document.getElementById('meta-top-cliente').innerText = clientesConVenta[0] ? `${clientesConVenta[0].id} - ${clientesConVenta[0].nombre}` : "-";
+
+            document.getElementById('drop-zone').classList.add('bg-slate-800/20', 'py-3');
+
+            construirRanking();
+            construirSelectorRubros();
+            construirRadiografia();
+            construirSelectoresMatriz();
+            construirModuloRetencionCaidos();
+
+            let arrayRubros = Array.from(listadoTodosRubros).sort();
+            if (!ultimoRubroSeleccionadoVistaB || !listadoTodosRubros.has(ultimoRubroSeleccionadoVistaB)) {
+                let indexInyeccion = arrayRubros.findIndex(r => r.toUpperCase().includes("INYECCION") || r.toUpperCase().includes("INYECCIÓN") || r.toUpperCase().includes("INYECTOR"));
+                ultimoRubroSeleccionadoVistaB = indexInyeccion !== -1 ? arrayRubros[indexInyeccion] : (arrayRubros[0] || "");
+            }
+            if (ultimoRubroSeleccionadoVistaB) filtrarPorRubro(ultimoRubroSeleccionadoVistaB);
+        }
+
+        function construirModuloRetencionCaidos() {
+            let tbody = document.getElementById('body-retencion-caidos');
+            tbody.innerHTML = "";
+
+            if (periodoFiltroActual === "TOTAL") {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-amber-400 font-medium">💡 Seleccioná un mes individual (Ej: Febrero, Marzo, etc.) arriba a la derecha para ver qué clientes te compraron ese mes anterior pero dejaron de comprar en el mes activo.</td></tr>`;
+                document.getElementById('badge-contador-caidos').innerText = "0 Cuentas";
+                return;
+            }
+
+            let indexMesActual = listaMesesDetectados.indexOf(periodoFiltroActual);
+            if (indexMesActual === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-medium">El mes de ${periodoFiltroActual.toUpperCase()} es el corte inicial. Seleccioná meses posteriores para cruzar datos.</td></tr>`;
+                document.getElementById('badge-contador-caidos').innerText = "0 Cuentas";
+                return;
+            }
+
+            let mesAnterior = listaMesesDetectados[indexMesActual - 1];
+            document.getElementById('titulo-tabla-retencion').innerText = `Clientes activos en ${mesAnterior.toUpperCase()} que compraron $0,00 en ${periodoFiltroActual.toUpperCase()}`;
+
+            let clientesFugados = [];
+
+            Object.values(baseClientesRaw).forEach(cli => {
+                let datosMesAnterior = cli.periodos[mesAnterior];
+                let datosMesActual = cli.periodos[periodoFiltroActual];
+
+                if (datosMesAnterior.facturado > 0 && datosMesActual.facturado === 0) {
+                    clientesFugados.push({
+                        id: cli.id,
+                        nombre: cli.nombre,
+                        facturadoPasado: datosMesAnterior.facturado
+                    });
+                }
+            });
+
+            document.getElementById('badge-contador-caidos').innerText = `${clientesFugados.length} Cuentas`;
+            clientesFugados.sort((a,b) => b.facturadoPasado - a.facturadoPasado);
+
+            if (clientesFugados.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-emerald-400 font-bold">🎉 ¡Retención perfecta! Todos los compradores del mes pasado repitieron consumo este mes.</td></tr>`;
+                return;
+            }
+
+            clientesFugados.forEach(c => {
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-rose-950/10 border-b border-slate-800/60 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono font-bold text-slate-400">${c.id}</td>
+                    <td class="p-3 font-bold text-slate-100 cursor-pointer hover:underline hover:text-rose-400" onclick="openModalCliente('${c.id}')">${c.nombre}</td>
+                    <td class="p-3 text-right font-semibold text-emerald-400">${formatCurrency(c.facturadoPasado)}</td>
+                    <td class="p-3 text-right font-mono text-rose-400 font-bold">$0,00</td>
+                    <td class="p-3 text-center">
+                        <span class="bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded text-[11px] font-extrabold animate-pulse">Sin compras</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function construirRanking(filtrarNombre = "") {
+            let tbody = document.getElementById('body-ranking');
+            tbody.innerHTML = "";
+
+            let lista = Object.values(baseClientesRaw).map(cli => {
+                let p = cli.periodos[periodoFiltroActual];
+                return { id: cli.id, nombre: cli.nombre, facturado: p.facturado, cantidad: p.cantidad };
+            });
+
+            lista.sort((a,b) => b.facturado - a.facturado);
+            if(filtrarNombre) {
+                lista = lista.filter(c => c.nombre.toLowerCase().includes(filtrarNombre.toLowerCase()) || c.id.includes(filtrarNombre));
+            }
+
+            lista.forEach((cli, index) => {
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/40 cursor-pointer transition";
+                tr.onclick = () => openModalCliente(cli.id);
+                tr.innerHTML = `
+                    <td class="p-3 font-mono text-slate-400 font-bold">${index + 1}</td>
+                    <td class="p-3 font-bold text-slate-300">${cli.id}</td>
+                    <td class="p-3 font-semibold text-emerald-400 hover:underline">${cli.nombre}</td>
+                    <td class="p-3 text-right text-slate-300">${cli.cantidad.toLocaleString('es-AR')}</td>
+                    <td class="p-3 text-right font-bold text-slate-100">${formatCurrency(cli.facturado)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function construirSelectorRubros() {
+            let container = document.getElementById('container-botones-rubros');
+            container.innerHTML = "";
+            let sortedRubros = Array.from(listadoTodosRubros).sort();
+            sortedRubros.forEach(rubro => {
+                let btn = document.createElement('button');
+                btn.id = `btn-rubro-${btoa(encodeURIComponent(rubro)).replace(/=/g, "")}`;
+                btn.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase bg-slate-700 hover:bg-slate-600 text-slate-200 cursor-pointer";
+                btn.innerText = rubro;
+                btn.onclick = () => filtrarPorRubro(rubro);
+                container.appendChild(btn);
+            });
+        }
+
+        function filtrarPorRubro(rubroNombre) {
+            ultimoRubroSeleccionadoVistaB = rubroNombre;
+            document.getElementById('rubro-seleccionado-titulo').innerText = `Clientes Compradores de: ${rubroNombre} (${periodoFiltroActual === 'TOTAL' ? 'Anual' : periodoFiltroActual.toUpperCase()})`;
+            
+            let todosLosBotones = document.querySelectorAll('#container-botones-rubros button');
+            todosLosBotones.forEach(b => { b.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase bg-slate-700 hover:bg-slate-600 text-slate-200 cursor-pointer"; });
+
+            let idBuscado = `btn-rubro-${btoa(encodeURIComponent(rubroNombre)).replace(/=/g, "")}`;
+            let elBotónActivo = document.getElementById(idBuscado);
+            if(elBotónActivo) elBotónActivo.className = "px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all uppercase bg-emerald-500 text-slate-950 shadow ring-2 ring-emerald-300";
+
+            let tbody = document.getElementById('body-rubros-clientes');
+            tbody.innerHTML = "";
+
+            let clientesCompradores = [];
+            Object.values(baseClientesRaw).forEach(cli => {
+                let p = cli.periodos[periodoFiltroActual];
+                if (p.rubros[rubroNombre]) {
+                    clientesCompradores.push({ id: cli.id, nombre: cli.nombre, subrubros: Array.from(p.rubros[rubroNombre].subrubros).join(', ') || 'General', amount: p.rubros[rubroNombre].total, qty: p.rubros[rubroNombre].cantidad });
+                }
+            });
+
+            document.getElementById('badge-contador-rubro').innerText = `${clientesCompradores.length} Clientes`;
+            clientesCompradores.sort((a,b) => b.amount - a.amount);
+
+            if(clientesCompradores.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-500">Ninguna transacción registrada para este rubro.</td></tr>`;
+                return;
+            }
+
+            clientesCompradores.forEach(item => {
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/40 cursor-pointer";
+                tr.onclick = () => openModalCliente(item.id);
+                tr.innerHTML = `
+                    <td class="p-3"><span class="font-bold text-slate-400 mr-2">${item.id}</span> <span class="text-slate-200 font-medium">${item.nombre}</span></td>
+                    <td class="p-3 text-xs text-slate-400 italic max-w-xs truncate">${item.subrubros}</td>
+                    <td class="p-3 text-right text-slate-300">${item.qty.toLocaleString('es-AR')}</td>
+                    <td class="p-3 text-right font-bold text-emerald-400">${formatCurrency(item.amount)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function construirRadiografia(filtrarNombre = "") {
+            let tbody = document.getElementById('body-radiografia');
+            tbody.innerHTML = "";
+
+            let lista = Object.values(baseClientesRaw).map(cli => {
+                let p = cli.periodos[periodoFiltroActual];
+                return { id: cli.id, nombre: cli.nombre, facturado: p.facturado, rubros: p.rubros };
+            });
+
+            lista.sort((a,b) => b.facturado - a.facturado);
+            if(filtrarNombre) lista = lista.filter(c => c.nombre.toLowerCase().includes(filtrarNombre.toLowerCase()) || c.id.includes(filtrarNombre));
+
+            let todosLosRubrosArr = Array.from(listadoTodosRubros).sort();
+
+            lista.forEach(cli => {
+                let rubrosComprados = Object.keys(cli.rubros).sort();
+                let rubrosFaltantes = todosLosRubrosArr.filter(r => !rubrosComprados.includes(r));
+
+                let maxRubroGasto = 0;
+                rubrosComprados.forEach(r => { if(cli.rubros[r].total > maxRubroGasto) maxRubroGasto = cli.rubros[r].total; });
+                
+                let ratioConcentracion = cli.facturado > 0 ? (maxRubroGasto / cli.facturado) : 0;
+                let badgeSalud = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-xs block text-center font-bold">Mix OK</span>`;
+                
+                if (cli.facturado === 0) badgeSalud = `<span class="bg-slate-700 text-slate-400 px-2 py-0.5 rounded text-xs block text-center">Inactivo</span>`;
+                else if (ratioConcentracion > 0.75 && rubrosComprados.length === 1) badgeSalud = `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded text-xs font-bold block text-center animate-pulse">Alerta</span>`;
+                else if (ratioConcentracion > 0.60) badgeSalud = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-xs block text-center font-medium">Riesgo</span>`;
+
+                let bloquesComprados = rubrosComprados.map(r => `<span class="inline-block bg-slate-900 text-emerald-400 text-[10px] px-2 py-0.5 rounded mr-1 mb-1 border border-slate-700 font-medium">${r}</span>`).join('');
+                let bloquesFaltantes = rubrosFaltantes.map(r => `<span class="inline-block bg-amber-500/5 text-amber-400/90 text-[10px] px-2 py-0.5 rounded mr-1 mb-1 border border-amber-500/20 font-medium">${r}</span>`).join('');
+
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/40 border-b border-slate-800 transition align-top";
+                tr.innerHTML = `
+                    <td class="p-3 cursor-pointer bg-slate-800 font-bold" onclick="openModalCliente('${cli.id}')">
+                        <p class="font-bold text-slate-200 hover:underline hover:text-emerald-400">${cli.nombre}</p>
+                        <p class="text-xs font-mono text-slate-500">Cód: ${cli.id}</p>
+                    </td>
+                    <td class="p-3"><div class="flex flex-wrap gap-0.5 max-h-[140px] overflow-y-auto custom-scroll">${bloquesComprados || '<span class="text-xs text-slate-600 italic">Sin consumos</span>'}</div></td>
+                    <td class="p-3"><div class="flex flex-wrap gap-0.5 max-h-[140px] overflow-y-auto custom-scroll">${bloquesFaltantes || '<span class="text-xs text-emerald-400 font-extrabold">100% cobertura</span>'}</div></td>
+                    <td class="p-3">${badgeSalud}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function construirSelectoresMatriz() {
+            let selectBase = document.getElementById('select-matriz-base');
+            let selectObjetivo = document.getElementById('select-matriz-objetivo');
+            let prevBase = selectBase.value; let prevObjetivo = selectObjetivo.value;
+
+            selectBase.innerHTML = ""; selectObjetivo.innerHTML = "";
+            let arrRubros = Array.from(listadoTodosRubros).sort();
+            arrRubros.forEach(r => {
+                let opt1 = document.createElement('option'); opt1.value = r; opt1.innerText = r; selectBase.appendChild(opt1);
+                let opt2 = document.createElement('option'); opt2.value = r; opt2.innerText = r; selectObjetivo.appendChild(opt2);
+            });
+
+            if (prevBase && arrRubros.includes(prevBase)) selectBase.value = prevBase;
+            if (prevObjetivo && arrRubros.includes(prevObjetivo)) selectObjetivo.value = prevObjetivo;
+            else if(arrRubros.length > 1) selectObjetivo.selectedIndex = 1;
+        }
+
+        function ejecutarAnalisisCruzado() {
+            let rubroBase = document.getElementById('select-matriz-base').value;
+            let rubroObjetivo = document.getElementById('select-matriz-objetivo').value;
+            let tbody = document.getElementById('body-matriz-oportunidades');
+            tbody.innerHTML = "";
+
+            if(rubroBase === rubroObjetivo) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-rose-400 font-semibold">⚠️ Selecciona rubros distintos.</td></tr>`;
+                return;
+            }
+
+            let clientesObjetivo = [];
+            Object.values(baseClientesRaw).forEach(cli => {
+                let p = cli.periodos[periodoFiltroActual];
+                if (p.rubros[rubroBase] && !p.rubros[rubroObjetivo]) {
+                    clientesObjetivo.push({ id: cli.id, nombre: cli.nombre, totalBase: p.rubros[rubroBase].total });
+                }
+            });
+
+            clientesObjetivo.sort((a,b) => b.totalBase - a.totalBase);
+
+            if(clientesObjetivo.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-emerald-400 font-medium">🎉 Cobertura completa para estos rubros en este periodo.</td></tr>`;
+                return;
+            }
+
+            clientesObjetivo.forEach(item => {
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/40 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono text-slate-400 font-bold">${item.id}</td>
+                    <td class="p-3 font-medium text-slate-200">${item.nombre}</td>
+                    <td class="p-3 text-right font-semibold text-slate-300">${formatCurrency(item.totalBase)}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="openModalCliente('${item.id}')" class="bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-slate-950 px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer">Ofrecer ${rubroObjetivo}</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function handleGlobalSearch() {
+            let query = document.getElementById('global-search').value;
+            if (vistaActual === 'ranking') construirRanking(query);
+            if (vistaActual === 'radiografia') construirRadiografia(query);
+        }
+
+        function switchView(viewName) {
+            vistaActual = viewName;
+            document.getElementById('view-ranking').classList.add('hidden');
+            document.getElementById('view-rubros').classList.add('hidden');
+            document.getElementById('view-radiografia').classList.add('hidden');
+            document.getElementById('view-matriz').classList.add('hidden');
+            document.getElementById('view-retencion').classList.add('hidden');
+
+            document.querySelectorAll('#nav-tabs button').forEach(b => b.className = "px-4 py-2 bg-slate-700 font-bold text-slate-200 hover:bg-slate-600 rounded-lg text-sm transition-all cursor-pointer");
+
+            let targetView = `view-${viewName}`;
+            let targetTab = `btn-tab-${viewName}`;
+            
+            document.getElementById(targetView).classList.remove('hidden');
+            document.getElementById(targetTab).className = viewName === 'retencion' 
+                ? "px-4 py-2 bg-rose-700 text-white font-bold rounded-lg text-sm transition-all shadow-md ring-2 ring-rose-400 cursor-pointer"
+                : "px-4 py-2 bg-emerald-600 text-slate-950 font-bold rounded-lg text-sm transition-all shadow-md cursor-pointer";
+
+            handleGlobalSearch();
+        }
+
+        function openModalCliente(clienteId) {
+            let cli = baseClientesRaw[clienteId];
+            if (!cli) return;
+            let pData = cli.periodos[periodoFiltroActual];
+
+            document.getElementById('modal-titulo-cliente').innerText = cli.nombre;
+            document.getElementById('modal-id-cliente').innerText = `CÓDIGO DE CUENTA: ${cli.id} | FILSTRO ACTIVO: ${periodoFiltroActual.toUpperCase()}`;
+            document.getElementById('modal-total-compras').innerText = formatCurrency(pData.facturado);
+
+            let listContainer = document.getElementById('modal-lista-rubros');
+            listContainer.innerHTML = "";
+
+            if (pData.facturado === 0) {
+                listContainer.innerHTML = `<p class="text-sm text-slate-500 text-center py-6">La cuenta no registra compras en este periodo.</p>`;
+                document.getElementById('modal-perfil-salud').innerText = "Inactivo en mes";
+                document.getElementById('modal-perfil-salud').className = "text-sm font-bold mt-1 text-slate-500";
+                document.getElementById('modal-cliente').classList.remove('hidden');
+                return;
+            }
+
+            let maxGasto = 0;
+            Object.values(pData.rubros).forEach(r => { if(r.total > maxGasto) maxGasto = r.total; });
+            let ratio = pData.facturado > 0 ? (maxGasto / pData.facturado) : 0;
+
+            let labelSalud = "Excelente Mix de Compra"; let colorSalud = "text-emerald-400";
+            if(ratio > 0.75 && Object.keys(pData.rubros).length === 1) { labelSalud = "Alerta: Monoproducto"; colorSalud = "text-rose-400"; }
+            else if(ratio > 0.60) { labelSalud = "Atención: Concentrado"; colorSalud = "text-amber-400"; }
+
+            document.getElementById('modal-perfil-salud').innerText = labelSalud;
+            document.getElementById('modal-perfil-salud').className = `text-sm font-bold mt-1 ${colorSalud}`;
+
+            Object.keys(pData.rubros).sort((a,b) => pData.rubros[b].total - pData.rubros[a].total).forEach(rubro => {
+                let data = pData.rubros[rubro];
+                let pct = pData.facturado > 0 ? ((data.total / pData.facturado) * 100).toFixed(1) : 0;
+                let alfasArr = Array.from(data.codigosAlfa);
+                let alfasHtml = alfasArr.length > 0 ? alfasArr.map(code => `<span class="bg-slate-800 text-amber-400 px-1.5 py-0.5 rounded text-[10px] border border-slate-700/60 font-mono font-semibold">${code}</span>`).join(' ') : '<span class="text-slate-600">No mapeado</span>';
+
+                let itemDiv = document.createElement('div');
+                itemDiv.className = "bg-slate-900/90 p-3 rounded-xl border border-slate-700/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2 text-xs";
+                itemDiv.innerHTML = `
+                    <div class="space-y-1 max-w-xl">
+                        <p class="font-bold text-slate-200 uppercase text-sm">${rubro}</p>
+                        <p class="text-[11px] text-slate-400"><strong class="text-slate-500">Subrubros:</strong> ${Array.from(data.subrubros).join(', ') || 'Venta general'}</p>
+                        <div class="flex flex-wrap gap-1 items-center pt-0.5"><span class="text-[10px] text-slate-500 font-bold uppercase mr-1">Códs. Alfa:</span>${alfasHtml}</div>
+                    </div>
+                    <div class="text-left md:text-right shrink-0">
+                        <p class="font-extrabold text-slate-100 text-sm">${formatCurrency(data.total)}</p>
+                        <p class="text-[10px] text-emerald-400 font-mono font-semibold">${pct}% del mix</p>
+                        <p class="text-[10px] text-slate-500 mt-0.5">${data.cantidad.toLocaleString('es-AR')} un.</p>
+                    </div>
+                `;
+                listContainer.appendChild(itemDiv);
+            });
+
+            document.getElementById('modal-cliente').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('modal-cliente').classList.add('hidden'); }
+
+        function splitCSVLine(text) {
+            let result = []; let start = 0; let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                if (text[i] === '"') { inQuotes = !inQuotes; }
+                else if (text[i] === ';' && !inQuotes) { result.push(text.substring(start, i)); start = i + 1; }
+            }
+            result.push(text.substring(start)); return result;
+        }
+
+        function parseCurrency(val) {
+            if (!val) return 0;
+            let clean = val.trim().replace(/^"|"$/g, '').trim();
+            clean = clean.replace(/\./g, '').replace(/,/g, '.'); 
+            let num = parseFloat(clean); return isNaN(num) ? 0 : num;
+        }
+
+        function formatCurrency(num) { return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num); }
+
+        function exportTableToCSV(tableId, filename) {
+            let table = document.getElementById(tableId); let rows = table.querySelectorAll('tr'); let csv = [];
+            for (let i = 0; i < rows.length; i++) {
+                let row = [], cols = rows[i].querySelectorAll('td, th');
+                for (let j = 0; j < cols.length; j++) { let data = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, "").replace(/;/g, ","); row.push('"' + data + '"'); }
+                csv.push(row.join(';'));
+            }
+            let csvFile = new Blob(["\ufeff" + csv.join('\n')], {type: "text/csv;charset=utf-8;"});
+            let downloadLink = document.createElement("a");
+            downloadLink.download = `${filename}_${periodoFiltroActual.toUpperCase()}_${new Date().toISOString().slice(0,10)}.csv`;
+            downloadLink.href = window.URL.createObjectURL(csvFile); downloadLink.style.display = "none";
+            document.body.appendChild(downloadLink); downloadLink.click(); document.body.removeChild(downloadLink);
+        }
+    </script>
+</body>
+</html>
